@@ -13,6 +13,15 @@ class Settings(BaseSettings):
     app_base_url: str = "http://localhost:8000"
     poll_interval_minutes: int = 15
 
+    # Database — SQLite for local dev, Supabase PostgreSQL for production
+    # Supabase connection string from: Project Settings → Database → Connection string (URI)
+    # Use the "Session mode" pooler URL for Vercel serverless:
+    # postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
+    database_url: str = "sqlite:///./reviews.db"
+
+    # Vercel Cron secret (set CRON_SECRET in Vercel env vars to protect the /api/cron endpoint)
+    cron_secret: Optional[str] = None
+
     # Claude API
     anthropic_api_key: str = ""
 

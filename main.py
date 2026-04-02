@@ -8,15 +8,17 @@ Routes:
   POST /review/{id}/approve    → Approve & send a response (1-2 star)
   POST /review/{id}/regenerate → Regenerate AI draft with owner notes
   POST /review/{id}/dismiss    → Dismiss a review (no response)
-  POST /poll          → Manually trigger a platform poll
-  GET  /api/stats     → JSON stats for the dashboard
+  GET  /api/cron      → Called by Vercel Cron every 15 min to poll platforms
+  POST /poll          → Manually trigger a platform poll from the dashboard
+  GET  /api/stats     → JSON stats for live dashboard refresh
 """
 
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
-from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Depends, Form, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -26,45 +28,52 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db, init_db
-from models import Review, ReviewResponse, Notification, ReviewStatus, Platform
+from models import Review, ReviewResponse, ReviewStatus, Platform
 from scheduler import poll_all_platforms, post_approved_response
 from ai_responder import regenerate_response
 
+# Absolute paths so templates/static work on both local and Vercel
+BASE_DIR = Path(__file__).resolve().parent
 
 # ---------------------------------------------------------------------------
-# App lifecycle
+# App lifecycle — APScheduler runs locally; Vercel uses its own Cron Jobs
 # ---------------------------------------------------------------------------
 
-scheduler = BackgroundScheduler()
+IS_VERCEL = os.getenv("VERCEL") == "1"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    scheduler.add_job(
-        poll_all_platforms,
-        "interval",
-        minutes=settings.poll_interval_minutes,
-        id="poll_platforms",
-        replace_existing=True,
-        next_run_time=datetime.utcnow(),  # Run immediately on startup
-    )
-    scheduler.start()
-    print(
-        f"[App] Started. Polling every {settings.poll_interval_minutes} min. "
-        f"Dashboard at {settings.app_base_url}"
-    )
-    yield
-    scheduler.shutdown(wait=False)
-    print("[App] Shutting down.")
+    if not IS_VERCEL:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        _scheduler = BackgroundScheduler()
+        _scheduler.add_job(
+            poll_all_platforms,
+            "interval",
+            minutes=settings.poll_interval_minutes,
+            id="poll_platforms",
+            replace_existing=True,
+            next_run_time=datetime.utcnow(),
+        )
+        _scheduler.start()
+        print(
+            f"[App] Local mode. Polling every {settings.poll_interval_minutes} min. "
+            f"Dashboard at {settings.app_base_url}"
+        )
+        yield
+        _scheduler.shutdown(wait=False)
+    else:
+        print("[App] Vercel mode. Polling driven by Vercel Cron → /api/cron")
+        yield
 
 
 app = FastAPI(
     title=f"{settings.business_name} — Review Manager",
     lifespan=lifespan,
 )
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
 # ---------------------------------------------------------------------------
@@ -257,9 +266,24 @@ async def dismiss_review(
     return RedirectResponse(url="/?filter=pending", status_code=303)
 
 
+@app.get("/api/cron")
+async def vercel_cron(request: Request):
+    """
+    Vercel Cron Job endpoint — polls all review platforms on schedule.
+    Vercel calls this every 15 minutes (configured in vercel.json).
+    Protected by CRON_SECRET env var when set.
+    """
+    if settings.cron_secret:
+        auth = request.headers.get("authorization", "")
+        if auth != f"Bearer {settings.cron_secret}":
+            raise HTTPException(status_code=401, detail="Unauthorized")
+    count = poll_all_platforms()
+    return JSONResponse({"success": True, "new_reviews": count})
+
+
 @app.post("/poll")
 async def manual_poll(request: Request):
-    """Manually trigger a platform poll (useful for testing)."""
+    """Manually trigger a platform poll from the dashboard."""
     count = poll_all_platforms()
     return JSONResponse({"success": True, "new_reviews": count})
 

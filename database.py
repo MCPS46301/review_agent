@@ -1,12 +1,22 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from config import settings
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./reviews.db"
+_url = settings.database_url
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-)
+# SQLite needs check_same_thread=False; PostgreSQL needs pool settings for serverless
+if _url.startswith("sqlite"):
+    engine = create_engine(_url, connect_args={"check_same_thread": False})
+else:
+    # Supabase / PostgreSQL — use NullPool for Vercel serverless (each invocation
+    # gets a fresh connection; no idle connections left open between requests)
+    from sqlalchemy.pool import NullPool
+    engine = create_engine(
+        _url,
+        poolclass=NullPool,
+        pool_pre_ping=True,
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

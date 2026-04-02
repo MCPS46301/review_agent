@@ -14,9 +14,42 @@ Automated online reputation management for Macomb Powersports. Monitors Google, 
 
 **Email alerts** are sent for every new review. For 1–2 star reviews, the alert contains a direct link to the approval page.
 
-## Quick Start
+## Deploy to Vercel + Supabase (Production)
 
-### 1. Clone and Install
+### 1. Set up Supabase
+
+1. Go to [supabase.com](https://supabase.com) → **New Project**
+2. Once created: **Project Settings → Database → Connection string → URI tab**
+3. Copy the **Session mode pooler** URL (port 5432) — it looks like:
+   ```
+   postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
+   ```
+4. Save it — you'll paste it as `DATABASE_URL` in Vercel
+
+### 2. Deploy to Vercel
+
+1. Install Vercel CLI: `npm i -g vercel` (or use [vercel.com](https://vercel.com) web UI)
+2. Push this repo to GitHub
+3. In Vercel Dashboard → **Add New Project** → Import your GitHub repo
+4. Under **Environment Variables**, add every key from `.env.example`:
+   - `DATABASE_URL` = your Supabase PostgreSQL URL from step 1
+   - `ANTHROPIC_API_KEY` = your Claude API key
+   - `APP_BASE_URL` = your Vercel URL, e.g. `https://macomb-reviews.vercel.app`
+   - `BUSINESS_OWNER_EMAIL` = your email address
+   - `SMTP_*` = Gmail credentials
+   - All platform API keys (Google, Facebook, Yelp)
+   - `CRON_SECRET` = a random secret (generate: `openssl rand -hex 32`)
+5. Click **Deploy**
+
+The Vercel Cron Job in `vercel.json` automatically polls for new reviews every 15 minutes — no server needed.
+
+> **Note:** Vercel Hobby plan includes 1 free cron job. The 60-second function timeout on Pro is recommended for reliable polling across all three platforms.
+
+---
+
+## Local Development
+
+### 1. Install
 
 ```bash
 cd review_agent
@@ -27,13 +60,15 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env with your credentials (see sections below)
+# Edit .env with your credentials
 ```
 
-The **minimum required** credentials to get started:
+Minimum required:
 - `ANTHROPIC_API_KEY` — for AI response generation
-- `SMTP_*` settings — for email notifications
+- `SMTP_*` — for email notifications
 - At least one review platform (Google, Facebook, or Yelp)
+
+Leave `DATABASE_URL` as the default SQLite value for local development.
 
 ### 3. Run
 
