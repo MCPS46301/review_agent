@@ -20,6 +20,8 @@ PROJECT_NAME = "macomb-reviews"
 KNOWN_ENV = {
     "DATABASE_URL": "postgresql://postgres:changeme2026%21%24%24@db.aarysgprbhdiggjtqoif.supabase.co:5432/postgres",
     "BUSINESS_NAME": "Macomb Powersports",
+    "BUSINESS_OWNER_NAME": "Lloyd",
+    "BUSINESS_OWNER_EMAIL": "lloyd@macombpowersports.com",
     "SMTP_HOST": "smtp.gmail.com",
     "SMTP_PORT": "587",
     "SMTP_USE_TLS": "true",
@@ -33,8 +35,6 @@ SECRET_KEYS = [
     "SMTP_USERNAME",
     "SMTP_PASSWORD",
     "SMTP_FROM_EMAIL",
-    "BUSINESS_OWNER_EMAIL",
-    "BUSINESS_OWNER_NAME",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
     "GOOGLE_REFRESH_TOKEN",
