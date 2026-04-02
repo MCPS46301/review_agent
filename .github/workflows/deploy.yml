@@ -11,18 +11,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Test Vercel token
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set Vercel env vars
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          echo "Token length: ${#VERCEL_TOKEN}"
-          curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" https://api.vercel.com/v2/user \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); print('Logged in as:', d['user']['name'], d['user']['email'])" \
-            || echo "TOKEN INVALID or API unreachable"
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: python .github/setup_vercel.py
 
-      - name: Install Vercel CLI and deploy
+      - name: Deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           npm install -g vercel@latest
-          vercel deploy --token "$VERCEL_TOKEN" --prod --yes 2>&1
+          vercel deploy --token "$VERCEL_TOKEN" --prod --yes

@@ -7,16 +7,14 @@ from database import Base
 
 class Platform(str, PyEnum):
     GOOGLE = "google"
-    FACEBOOK = "facebook"
-    YELP = "yelp"
 
 
 class ReviewStatus(str, PyEnum):
-    NEW = "new"               # Just fetched, AI response being generated
-    PENDING_APPROVAL = "pending_approval"  # 1-2 stars, awaiting owner review
-    APPROVED = "approved"     # Owner approved response (1-2 stars)
-    RESPONDED = "responded"   # Response has been posted
-    DISMISSED = "dismissed"   # Owner chose not to respond
+    NEW = "new"
+    PENDING_APPROVAL = "pending_approval"
+    APPROVED = "approved"
+    RESPONDED = "responded"
+    DISMISSED = "dismissed"
 
 
 class Review(Base):
@@ -27,7 +25,7 @@ class Review(Base):
     platform_review_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     reviewer_name: Mapped[str] = mapped_column(String(255), nullable=False)
     reviewer_avatar: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    rating: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-5
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
     review_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     status: Mapped[str] = mapped_column(
@@ -52,16 +50,11 @@ class Review(Base):
 
     @property
     def star_display(self) -> str:
-        return "★" * self.rating + "☆" * (5 - self.rating)
+        return "\u2605" * self.rating + "\u2606" * (5 - self.rating)
 
     @property
     def platform_badge_color(self) -> str:
-        colors = {
-            Platform.GOOGLE: "bg-blue-100 text-blue-800",
-            Platform.FACEBOOK: "bg-indigo-100 text-indigo-800",
-            Platform.YELP: "bg-red-100 text-red-800",
-        }
-        return colors.get(self.platform, "bg-gray-100 text-gray-800")
+        return "bg-blue-100 text-blue-800"
 
     @property
     def rating_color(self) -> str:
