@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ business_name }} — Review Manager{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50:  '#fef2f2',
+                            100: '#fee2e2',
+                            500: '#ef4444',
+                            600: '#dc2626',
+                            700: '#b91c1c',
+                            800: '#991b1b',
+                            900: '#7f1d1d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .star-filled { color: #f59e0b; }
+        .star-empty  { color: #d1d5db; }
+        .rating-1, .rating-2 { color: #dc2626; }
+        .rating-3             { color: #d97706; }
+        .rating-4, .rating-5  { color: #16a34a; }
+        .platform-google   { background: #dbeafe; color: #1d4ed8; }
+        .platform-facebook { background: #e0e7ff; color: #3730a3; }
+        .platform-yelp     { background: #fee2e2; color: #b91c1c; }
+        .badge { display: inline-flex; align-items: center; padding: 2px 10px;
+                 border-radius: 9999px; font-size: .75rem; font-weight: 600; }
+        @keyframes pulse-border {
+            0%, 100% { border-color: #fbbf24; }
+            50%       { border-color: #f59e0b; }
+        }
+        .pending-card { animation: pulse-border 2s ease-in-out infinite; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- Top Nav -->
+<nav class="bg-gray-900 text-white shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+            <div class="flex items-center gap-3">
+                <a href="/" class="flex items-center gap-3 hover:opacity-90 transition">
+                    <div class="bg-red-600 rounded-lg p-1.5">
+                        <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="font-bold text-lg leading-none">{{ business_name }}</span>
+                        <span class="text-gray-400 text-xs block leading-none">Review Manager</span>
+                    </div>
+                </a>
+            </div>
+            <div class="flex items-center gap-4">
+                {% block nav_extra %}{% endblock %}
+                <button onclick="triggerPoll()"
+                        class="flex items-center gap-2 text-sm bg-gray-700 hover:bg-gray-600
+                               px-3 py-1.5 rounded-lg transition" title="Fetch new reviews now">
+                    <svg id="poll-icon" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    <span id="poll-label">Refresh</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    {% block content %}{% endblock %}
+</main>
+
+<!-- Toast notification -->
+<div id="toast" class="fixed bottom-6 right-6 z-50 hidden">
+    <div class="bg-gray-900 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3">
+        <span id="toast-icon" class="text-green-400 text-lg">✓</span>
+        <span id="toast-msg">Done</span>
+    </div>
+</div>
+
+<script>
+function showToast(msg, icon='✓', success=true) {
+    const t = document.getElementById('toast');
+    document.getElementById('toast-msg').textContent = msg;
+    document.getElementById('toast-icon').textContent = icon;
+    document.getElementById('toast-icon').className = success
+        ? 'text-green-400 text-lg' : 'text-red-400 text-lg';
+    t.classList.remove('hidden');
+    setTimeout(() => t.classList.add('hidden'), 4000);
+}
+
+async function triggerPoll() {
+    const icon = document.getElementById('poll-icon');
+    const label = document.getElementById('poll-label');
+    icon.classList.add('animate-spin');
+    label.textContent = 'Checking...';
+    try {
+        const r = await fetch('/poll', { method: 'POST' });
+        const data = await r.json();
+        showToast(
+            data.new_reviews > 0
+                ? `Found ${data.new_reviews} new review${data.new_reviews !== 1 ? 's' : ''}!`
+                : 'No new reviews found.',
+            data.new_reviews > 0 ? '🎉' : '✓'
+        );
+        if (data.new_reviews > 0) setTimeout(() => location.reload(), 1500);
+    } catch(e) {
+        showToast('Poll failed — check server logs', '✗', false);
+    } finally {
+        icon.classList.remove('animate-spin');
+        label.textContent = 'Refresh';
+    }
+}
+
+// Show URL-param flash messages
+const params = new URLSearchParams(location.search);
+if (params.get('sent') === '1')
+    showToast('Response sent successfully!', '✓');
+else if (params.get('sent') === 'yelp_manual')
+    showToast('Response saved! Copy it and paste at biz.yelp.com', 'ℹ');
+else if (params.get('regenerated') === '1')
+    showToast('New draft generated!', '🤖');
+else if (params.get('error') === 'post_failed')
+    showToast('Failed to post to platform — check API credentials', '✗', false);
+</script>
+
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

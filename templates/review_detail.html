@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {{ review.reviewer_name }} ({{ review.rating }}★) — {{ business_name }}
+{% endblock %}
+
+{% block nav_extra %}
+<a href="/" class="text-gray-300 hover:text-white text-sm transition">← Back to Dashboard</a>
+{% endblock %}
+
+{% block content %}
+
+<div class="max-w-3xl mx-auto">
+
+<!-- Review Card -->
+<div class="bg-white rounded-xl shadow-sm border {% if review.rating <= 2 %}border-red-200{% else %}border-gray-100{% endif %} mb-6">
+    <div class="p-6">
+        <!-- Header -->
+        <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center gap-3">
+                {% if review.reviewer_avatar %}
+                <img src="{{ review.reviewer_avatar }}" alt="{{ review.reviewer_name }}"
+                     class="w-12 h-12 rounded-full object-cover">
+                {% else %}
+                <div class="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center
+                            text-gray-600 font-bold text-lg">
+                    {{ review.reviewer_name[0]|upper }}
+                </div>
+                {% endif %}
+                <div>
+                    <h2 class="font-bold text-gray-900 text-lg">{{ review.reviewer_name }}</h2>
+                    <div class="flex items-center gap-2 mt-0.5">
+                        <span class="badge platform-{{ review.platform }}">{{ review.platform|title }}</span>
+                        <span class="text-xs text-gray-400">
+                            {{ review.review_date.strftime('%B %d, %Y') }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {% if review.platform_url %}
+            <a href="{{ review.platform_url }}" target="_blank" rel="noopener"
+               class="text-sm text-gray-400 hover:text-gray-600 transition">
+                View on {{ review.platform|title }} ↗
+            </a>
+            {% endif %}
+        </div>
+
+        <!-- Stars -->
+        <div class="flex items-center gap-1 mb-4">
+            {% for i in range(1, 6) %}
+            <svg class="w-6 h-6 {% if i <= review.rating %}star-filled{% else %}star-empty{% endif %}"
+                 fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+            </svg>
+            {% endfor %}
+            <span class="ml-2 font-semibold {% if review.rating <= 2 %}text-red-600{% elif review.rating == 3 %}text-yellow-600{% else %}text-green-600{% endif %}">
+                {{ review.rating }}/5 stars
+            </span>
+        </div>
+
+        <!-- Review Text -->
+        <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
+            {% if review.review_text %}
+            <p class="text-gray-800 leading-relaxed italic">"{{ review.review_text }}"</p>
+            {% else %}
+            <p class="text-gray-400 italic">No written review — star rating only.</p>
+            {% endif %}
+        </div>
+
+        <!-- Status Badge -->
+        <div class="mt-4 flex items-center gap-2">
+            <span class="text-sm text-gray-500">Status:</span>
+            {% if review.status == 'pending_approval' %}
+            <span class="badge bg-amber-100 text-amber-800 border border-amber-300">⏳ Awaiting Your Approval</span>
+            {% elif review.status == 'responded' %}
+            <span class="badge bg-green-100 text-green-800">✓ Response Sent</span>
+            {% elif review.status == 'dismissed' %}
+            <span class="badge bg-gray-100 text-gray-600">Dismissed — No Response</span>
+            {% elif review.status == 'approved' %}
+            <span class="badge bg-blue-100 text-blue-800">Approved — Pending Post</span>
+            {% else %}
+            <span class="badge bg-gray-100 text-gray-600">New</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================================
+     YELP: Manual Response Section (Yelp doesn't allow API responses)
+     ===================================================================== -->
+{% if is_yelp %}
+<div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+    <span class="text-xl mt-0.5">ℹ️</span>
+    <div>
+        <p class="font-semibold text-red-900">Yelp responses must be posted manually</p>
+        <p class="text-sm text-red-700 mt-1">
+            Yelp does not allow businesses to post review responses via API.
+            Copy the drafted response below and paste it at
+            <a href="https://biz.yelp.com" target="_blank" class="underline font-medium">biz.yelp.com</a>.
+        </p>
+    </div>
+</div>
+{% endif %}
+
+<!-- =====================================================================
+     RESPONSE SECTION
+     ===================================================================== -->
+
+{% if review.status == 'responded' and review.response and review.response.final_text %}
+<!-- ── Already responded ── -->
+<div class="bg-white rounded-xl shadow-sm border border-green-200 mb-6">
+    <div class="p-6">
+        <h3 class="font-bold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="text-green-600">✓</span> Response Sent
+            {% if review.response.sent_at %}
+            <span class="text-xs text-gray-400 font-normal">
+                on {{ review.response.sent_at.strftime('%B %d, %Y at %I:%M %p') }}
+            </span>
+            {% endif %}
+        </h3>
+        <div class="bg-green-50 border border-green-100 rounded-lg p-4">
+            <p class="text-gray-800 leading-relaxed">{{ review.response.final_text }}</p>
+        </div>
+        {% if is_yelp %}
+        <button onclick="copyResponse('{{ review.response.final_text | e }}')"
+                class="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+            📋 Copy Response
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+{% elif review.status == 'pending_approval' %}
+<!-- ── Pending approval: show editable draft ── -->
+<div class="bg-white rounded-xl shadow-sm border-2 border-amber-400 mb-6">
+    <div class="p-6">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-gray-900 flex items-center gap-2">
+                <span class="text-amber-500">🤖</span>
+                AI-Generated Draft Response
+                <span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-normal">
+                    Requires Your Approval
+                </span>
+            </h3>
+        </div>
+
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
+            <strong>⚠️ Important:</strong> This response will be sent on your behalf to
+            {{ review.platform|title }}. Please read it carefully, edit if needed, then click
+            <strong>Send Response</strong>.
+        </div>
+
+        <!-- Approve + Send Form -->
+        <form method="post" action="/review/{{ review.id }}/approve" id="approve-form">
+            <textarea name="response_text" id="response-text" rows="5"
+                      class="w-full border border-gray-300 rounded-lg p-3 text-sm text-gray-800
+                             focus:outline-none focus:ring-2 focus:ring-amber-400 resize-y">{% if review.response %}{{ review.response.draft_text }}{% endif %}</textarea>
+
+            <div class="flex items-center justify-between mt-3 gap-3">
+                <div class="flex gap-2">
+                    <button type="submit"
+                            class="bg-amber-500 hover:bg-amber-600 text-white font-semibold
+                                   px-5 py-2 rounded-lg transition">
+                        {% if is_yelp %}Save & Copy for Yelp{% else %}Send Response{% endif %}
+                    </button>
+                    <form method="post" action="/review/{{ review.id }}/dismiss" class="inline">
+                        <button type="submit"
+                                onclick="return confirm('Are you sure you want to dismiss this review without responding?')"
+                                class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium
+                                       px-4 py-2 rounded-lg transition text-sm">
+                            Dismiss (No Response)
+                        </button>
+                    </form>
+                </div>
+                <span id="char-count" class="text-xs text-gray-400"></span>
+            </div>
+        </form>
+
+        <!-- Regenerate Section -->
+        <div class="mt-6 border-t border-gray-100 pt-5">
+            <h4 class="text-sm font-semibold text-gray-700 mb-2">
+                🔄 Not happy with the draft? Regenerate it.
+            </h4>
+            <form method="post" action="/review/{{ review.id }}/regenerate" class="flex gap-2">
+                <input type="text" name="owner_notes" placeholder="Optional: add guidance (e.g. 'mention our service team')"
+                       class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm
+                              focus:outline-none focus:ring-2 focus:ring-gray-300">
+                <button type="submit"
+                        class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                    Regenerate
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% elif review.response and (review.status == 'new' or review.status == 'approved') %}
+<!-- ── Has a response but not yet sent (e.g. auto-post failed) ── -->
+<div class="bg-white rounded-xl shadow-sm border border-blue-200 mb-6">
+    <div class="p-6">
+        <h3 class="font-bold text-gray-900 mb-3">Response Ready — Send Manually</h3>
+        {% if review.response.send_error %}
+        <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-sm text-red-700">
+            ⚠️ {{ review.response.send_error }}
+        </div>
+        {% endif %}
+        <form method="post" action="/review/{{ review.id }}/approve">
+            <textarea name="response_text" rows="5"
+                      class="w-full border border-gray-300 rounded-lg p-3 text-sm resize-y
+                             focus:outline-none focus:ring-2 focus:ring-blue-400">{{ review.response.final_text or review.response.draft_text }}</textarea>
+            <div class="flex gap-2 mt-3">
+                <button type="submit"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-lg transition">
+                    {% if is_yelp %}Copy for Yelp{% else %}Send Response{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% else %}
+<!-- ── No response yet, no special status ── -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
+    <div class="p-6">
+        <h3 class="font-bold text-gray-900 mb-3">Generate a Response</h3>
+        <form method="post" action="/review/{{ review.id }}/regenerate" class="flex gap-2">
+            <input type="text" name="owner_notes" placeholder="Optional guidance for Claude..."
+                   class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
+            <button type="submit"
+                    class="bg-gray-900 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                Generate Draft
+            </button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- =====================================================================
+     RESPONSE HISTORY / INFO BOX (for responded reviews)
+     ===================================================================== -->
+{% if review.status == 'responded' %}
+<div class="bg-gray-50 rounded-xl border border-gray-200 p-5">
+    <h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Review Timeline</h4>
+    <ul class="space-y-2 text-sm text-gray-600">
+        <li>🗓 Review left on {{ review.review_date.strftime('%B %d, %Y') }}</li>
+        <li>📥 Detected on {{ review.created_at.strftime('%B %d, %Y at %I:%M %p') }}</li>
+        {% if review.response and review.response.approved_at %}
+        <li>✅ Approved on {{ review.response.approved_at.strftime('%B %d, %Y at %I:%M %p') }}</li>
+        {% endif %}
+        {% if review.response and review.response.sent_at %}
+        <li>📤 Response sent on {{ review.response.sent_at.strftime('%B %d, %Y at %I:%M %p') }}</li>
+        {% endif %}
+    </ul>
+</div>
+{% endif %}
+
+</div><!-- /max-w-3xl -->
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Character counter for response textarea
+const textarea = document.getElementById('response-text');
+const counter  = document.getElementById('char-count');
+if (textarea && counter) {
+    function updateCount() {
+        const len = textarea.value.length;
+        counter.textContent = `${len} characters`;
+        counter.className = len > 1500
+            ? 'text-xs text-red-500'
+            : len > 1000 ? 'text-xs text-yellow-500' : 'text-xs text-gray-400';
+    }
+    textarea.addEventListener('input', updateCount);
+    updateCount();
+}
+
+// Copy to clipboard (for Yelp)
+function copyResponse(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Response copied to clipboard!', '📋');
+    }).catch(() => {
+        // Fallback: select textarea
+        const ta = document.querySelector('textarea');
+        if (ta) { ta.select(); document.execCommand('copy'); }
+        showToast('Response copied!', '📋');
+    });
+}
+</script>
+{% endblock %}
