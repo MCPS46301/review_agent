@@ -11,24 +11,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
 
-      - name: Deploy to Vercel
+      - name: Set environment variables on Vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          BUSINESS_OWNER_EMAIL: ${{ secrets.BUSINESS_OWNER_EMAIL }}
-          BUSINESS_OWNER_NAME: ${{ secrets.BUSINESS_OWNER_NAME }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-          GOOGLE_LOCATION_NAME: ${{ secrets.GOOGLE_LOCATION_NAME }}
-          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
-          YELP_API_KEY: ${{ secrets.YELP_API_KEY }}
-        run: python .github/deploy_vercel.py
+          BUSINESS_OWNER_NAME: Lloyd
+          BUSINESS_OWNER_EMAIL: lloyd@macombpowersports.com
+        run: |
+          # Link / create the project
+          vercel link --token $VERCEL_TOKEN --yes --project macomb-reviews
+
+          # Set all env vars for production
+          echo 'postgresql://postgres:changeme2026%21%24%24@db.aarysgprbhdiggjtqoif.supabase.co:5432/postgres' | vercel env add DATABASE_URL production --token $VERCEL_TOKEN --force
+          echo 'Macomb Powersports' | vercel env add BUSINESS_NAME production --token $VERCEL_TOKEN --force
+          echo 'Lloyd' | vercel env add BUSINESS_OWNER_NAME production --token $VERCEL_TOKEN --force
+          echo 'lloyd@macombpowersports.com' | vercel env add BUSINESS_OWNER_EMAIL production --token $VERCEL_TOKEN --force
+          echo 'smtp.gmail.com' | vercel env add SMTP_HOST production --token $VERCEL_TOKEN --force
+          echo '587' | vercel env add SMTP_PORT production --token $VERCEL_TOKEN --force
+          echo 'true' | vercel env add SMTP_USE_TLS production --token $VERCEL_TOKEN --force
+          echo 'macomb-powersports-macomb' | vercel env add YELP_BUSINESS_ID production --token $VERCEL_TOKEN --force
+          echo 'macombps2026secure' | vercel env add CRON_SECRET production --token $VERCEL_TOKEN --force
+          echo '15' | vercel env add POLL_INTERVAL_MINUTES production --token $VERCEL_TOKEN --force
+          echo 'https://macomb-reviews.vercel.app' | vercel env add APP_BASE_URL production --token $VERCEL_TOKEN --force
+          [ -n "$ANTHROPIC_API_KEY" ] && echo "$ANTHROPIC_API_KEY" | vercel env add ANTHROPIC_API_KEY production --token $VERCEL_TOKEN --force || true
+          [ -n "$SMTP_USERNAME" ] && echo "$SMTP_USERNAME" | vercel env add SMTP_USERNAME production --token $VERCEL_TOKEN --force || true
+          [ -n "$SMTP_USERNAME" ] && echo "$SMTP_USERNAME" | vercel env add SMTP_FROM_EMAIL production --token $VERCEL_TOKEN --force || true
+          [ -n "$SMTP_PASSWORD" ] && echo "$SMTP_PASSWORD" | vercel env add SMTP_PASSWORD production --token $VERCEL_TOKEN --force || true
+
+      - name: Deploy to production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --token $VERCEL_TOKEN --prod --yes
