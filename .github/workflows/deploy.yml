@@ -11,33 +11,94 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Deploy to Vercel
+      - name: Configure Vercel project and set env vars
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         run: |
-          vercel deploy \
-            --token "$VERCEL_TOKEN" \
-            --prod \
-            --yes \
-            --name macomb-reviews \
-            --env DATABASE_URL='postgresql://postgres:changeme2026%21%24%24@db.aarysgprbhdiggjtqoif.supabase.co:5432/postgres' \
-            --env BUSINESS_NAME='Macomb Powersports' \
-            --env BUSINESS_OWNER_NAME='Lloyd' \
-            --env BUSINESS_OWNER_EMAIL='lloyd@macombpowersports.com' \
-            --env SMTP_HOST='smtp.gmail.com' \
-            --env SMTP_PORT='587' \
-            --env SMTP_USE_TLS='true' \
-            --env YELP_BUSINESS_ID='macomb-powersports-macomb' \
-            --env CRON_SECRET='macombps2026secure' \
-            --env POLL_INTERVAL_MINUTES='15' \
-            --env APP_BASE_URL='https://macomb-reviews.vercel.app' \
-            --env ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
-            --env SMTP_USERNAME="$SMTP_USERNAME" \
-            --env SMTP_FROM_EMAIL="$SMTP_USERNAME" \
-            --env SMTP_PASSWORD="$SMTP_PASSWORD"
+          python3 << 'PYEOF'
+          import json, urllib.request, urllib.error, os
+
+          token = os.environ['VERCEL_TOKEN']
+
+          def api(method, path, body=None):
+              req = urllib.request.Request(
+                  f'https://api.vercel.com{path}',
+                  data=json.dumps(body).encode() if body else None,
+                  headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+                  method=method
+              )
+              try:
+                  with urllib.request.urlopen(req) as r:
+                      return json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  print(f'API error {e.code}: {e.read().decode()}')
+                  return None
+
+          # Get user/org info
+          me = api('GET', '/v2/user')
+          if not me:
+              raise SystemExit('Invalid VERCEL_TOKEN')
+          print(f"Authenticated: {me['user']['name']}")
+          org_id = me['user']['id']
+
+          # Get or create project
+          project = api('POST', '/v10/projects', {'name': 'macomb-reviews', 'framework': None})
+          if not project or 'id' not in project:
+              project = api('GET', '/v9/projects/macomb-reviews')
+          if not project or 'id' not in project:
+              raise SystemExit('Could not get or create project')
+
+          project_id = project['id']
+          print(f'Project ID: {project_id}')
+
+          # Write .vercel/project.json so CLI knows which project to deploy
+          os.makedirs('.vercel', exist_ok=True)
+          with open('.vercel/project.json', 'w') as f:
+              json.dump({'projectId': project_id, 'orgId': org_id}, f)
+          print('Wrote .vercel/project.json')
+
+          # Build env vars dict
+          env_vars = {
+              'DATABASE_URL': 'postgresql://postgres:changeme2026%21%24%24@db.aarysgprbhdiggjtqoif.supabase.co:5432/postgres',
+              'BUSINESS_NAME': 'Macomb Powersports',
+              'BUSINESS_OWNER_NAME': 'Lloyd',
+              'BUSINESS_OWNER_EMAIL': 'lloyd@macombpowersports.com',
+              'SMTP_HOST': 'smtp.gmail.com',
+              'SMTP_PORT': '587',
+              'SMTP_USE_TLS': 'true',
+              'YELP_BUSINESS_ID': 'macomb-powersports-macomb',
+              'CRON_SECRET': 'macombps2026secure',
+              'POLL_INTERVAL_MINUTES': '15',
+              'APP_BASE_URL': 'https://macomb-reviews.vercel.app',
+          }
+          for key in ['ANTHROPIC_API_KEY', 'SMTP_USERNAME', 'SMTP_PASSWORD']:
+              val = os.environ.get(key, '').strip()
+              if val:
+                  env_vars[key] = val
+          if 'SMTP_USERNAME' in env_vars:
+              env_vars['SMTP_FROM_EMAIL'] = env_vars['SMTP_USERNAME']
+
+          # Remove existing env vars and set fresh
+          existing = api('GET', f'/v9/projects/{project_id}/env') or {}
+          for var in existing.get('envs', []):
+              api('DELETE', f"/v9/projects/{project_id}/env/{var['id']}")
+          payload = [{'key': k, 'value': v, 'type': 'encrypted', 'target': ['production', 'preview', 'development']} for k, v in env_vars.items()]
+          result = api('POST', f'/v10/projects/{project_id}/env', payload) or {}
+          print(f"Set {len(result.get('created', []))} environment variables")
+          PYEOF
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Deploy to production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --token "$VERCEL_TOKEN" --prod --yes
