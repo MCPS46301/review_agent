@@ -5,9 +5,8 @@ Flow for each new review:
 1. Fetch from Google Business Profile API
 2. Skip if already in the database (dedup by platform_review_id)
 3. Generate AI draft response via Claude
-4. For 3-5 stars: Auto-post the response to Google
-5. For 1-2 stars: Save as PENDING_APPROVAL — owner must approve
-6. Send email notification to the business owner
+4. Queue ALL reviews for owner approval — nothing is posted automatically
+5. Send email notification to the business owner
 """
 
 from datetime import datetime
@@ -21,6 +20,7 @@ from config import settings
 
 
 def process_new_review(db: Session, platform: Platform, review_data: dict) -> Review | None:
+    # Dedup check
     existing = (
         db.query(Review)
         .filter(Review.platform_review_id == review_data["platform_review_id"])
@@ -65,21 +65,9 @@ def process_new_review(db: Session, platform: Platform, review_data: dict) -> Re
     db.add(response_record)
     db.flush()
 
-    if review.rating >= 3 and draft:
-        sent = post_google_reply(review.platform_review_id, draft)
-        if sent:
-            review.status = ReviewStatus.RESPONDED
-            response_record.final_text = draft
-            response_record.sent_at = datetime.utcnow()
-            print(f"[Scheduler] Auto-posted response for review #{review.id}")
-        else:
-            review.status = ReviewStatus.APPROVED
-            response_record.final_text = draft
-            response_record.send_error = "Auto-post failed — please post manually"
-            print(f"[Scheduler] Auto-post failed for review #{review.id}")
-    else:
-        review.status = ReviewStatus.PENDING_APPROVAL
-        print(f"[Scheduler] Review #{review.id} queued for owner approval")
+    # Safety mode: ALL reviews require Lloyd's approval before any response is posted
+    review.status = ReviewStatus.PENDING_APPROVAL
+    print(f"[Scheduler] Review #{review.id} queued for owner approval")
 
     db.commit()
 
@@ -98,7 +86,7 @@ def process_new_review(db: Session, platform: Platform, review_data: dict) -> Re
 
 
 def poll_all_platforms():
-    """Main polling job — fetch Google reviews and process new ones."""
+    """Main polling job \u2014 fetch Google reviews and process new ones."""
     print(f"[Scheduler] Polling Google at {datetime.utcnow().isoformat()}Z")
     db = SessionLocal()
     new_count = 0
@@ -122,8 +110,8 @@ def poll_all_platforms():
 
 def post_approved_response(review_id: int) -> tuple[bool, str | None]:
     """
-    Post an owner-approved response for a 1-2 star review.
-    Called from the web route when the owner clicks Send Response.
+    Post an owner-approved response to Google.
+    Called when Lloyd clicks 'Send Response' in the dashboard.
     """
     db = SessionLocal()
     try:
@@ -147,7 +135,7 @@ def post_approved_response(review_id: int) -> tuple[bool, str | None]:
             db.commit()
             return True, None
         else:
-            response.send_error = "Failed to post to Google — check API credentials"
+            response.send_error = "Failed to post to Google \u2014 check API credentials"
             db.commit()
             return False, response.send_error
 
