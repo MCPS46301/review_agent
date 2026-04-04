@@ -8,11 +8,12 @@ _url = settings.database_url
 if _url.startswith("sqlite"):
     engine = create_engine(_url, connect_args={"check_same_thread": False})
 else:
-    # Supabase / PostgreSQL — use NullPool for Vercel serverless (each invocation
-    # gets a fresh connection; no idle connections left open between requests)
+    # Use pg8000 (pure Python) driver — works on Vercel serverless without native libs
+    # Convert postgresql:// → postgresql+pg8000://
+    _pg_url = _url.replace("postgresql://", "postgresql+pg8000://", 1)
     from sqlalchemy.pool import NullPool
     engine = create_engine(
-        _url,
+        _pg_url,
         poolclass=NullPool,
         pool_pre_ping=True,
     )
