@@ -9,6 +9,7 @@ if _url.startswith("sqlite"):
     engine = create_engine(_url, connect_args={"check_same_thread": False})
 else:
     import re
+    import ssl
     from sqlalchemy.pool import NullPool
 
     # Use pg8000 (pure Python driver) — required on Vercel where psycopg2 is unavailable
@@ -20,15 +21,20 @@ else:
     if _pooler_match:
         _project_ref_match = re.search(r"aarysgprbhdiggjtqoif", _pg_url)
         if not _project_ref_match:
-            # Username is plain "postgres"; inject project ref
             _pg_url = re.sub(
                 r"(postgresql\+pg8000://)postgres:",
                 r"\1postgres.aarysgprbhdiggjtqoif:",
                 _pg_url,
             )
 
+    # Supabase requires SSL — pg8000 needs it passed explicitly via connect_args
+    _ssl_context = ssl.create_default_context()
+    _ssl_context.check_hostname = False
+    _ssl_context.verify_mode = ssl.CERT_NONE
+
     engine = create_engine(
         _pg_url,
+        connect_args={"ssl_context": _ssl_context},
         poolclass=NullPool,
         pool_pre_ping=True,
     )
