@@ -8,10 +8,25 @@ _url = settings.database_url
 if _url.startswith("sqlite"):
     engine = create_engine(_url, connect_args={"check_same_thread": False})
 else:
-    # Use pg8000 (pure Python) driver — works on Vercel serverless without native libs
-    # Convert postgresql:// → postgresql+pg8000://
-    _pg_url = _url.replace("postgresql://", "postgresql+pg8000://", 1)
+    import re
     from sqlalchemy.pool import NullPool
+
+    # Use pg8000 (pure Python driver) — required on Vercel where psycopg2 is unavailable
+    _pg_url = re.sub(r"^postgresql(\+\w+)?://", "postgresql+pg8000://", _url)
+
+    # Supabase connection pooler requires username format "postgres.PROJECT_REF".
+    # Auto-fix if the host is a pooler host and the username is plain "postgres".
+    _pooler_match = re.search(r"pooler\.supabase\.com", _pg_url)
+    if _pooler_match:
+        _project_ref_match = re.search(r"aarysgprbhdiggjtqoif", _pg_url)
+        if not _project_ref_match:
+            # Username is plain "postgres"; inject project ref
+            _pg_url = re.sub(
+                r"(postgresql\+pg8000://)postgres:",
+                r"\1postgres.aarysgprbhdiggjtqoif:",
+                _pg_url,
+            )
+
     engine = create_engine(
         _pg_url,
         poolclass=NullPool,
